@@ -1,4 +1,4 @@
-# Projeto-Mario-Kart-
+# Projeto-Mario-Kart
 # 🎮 Mario MMO (Terminal Game)
 
 Um jogo de batalha por turnos inspirado no universo Mario, rodando diretamente no terminal com Node.js. Dois jogadores escolhem personagens, coletam itens e competem em terrenos aleatórios até que apenas um sobreviva.
