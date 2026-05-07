@@ -1,174 +1,204 @@
-const player1 = {
-  NOME: "Mario",
-  VELOCIDADE: 4,
-  MANOBRABILIDADE: 3,
-  PODER: 3,
-  PONTOS: 0,
+import readline from 'readline/promises';
+
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+const c = {
+    reset: "\x1b[0m",
+    bright: "\x1b[1m",
+    red: "\x1b[31m",
+    green: "\x1b[32m",
+    yellow: "\x1b[33m",
+    blue: "\x1b[34m",
+    magenta: "\x1b[35m",
+    cyan: "\x1b[36m",
+    white: "\x1b[37m"
 };
 
-const player2 = {
-  NOME: "Luigi",
-  VELOCIDADE: 3,
-  MANOBRABILIDADE: 4,
-  PODER: 4,
-  PONTOS: 0,
-};
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-async function rollDice() {
-  return Math.floor(Math.random() * 6) + 1;
+const characters = [
+    { id: "1", name: "Mario", vel: 4, des: 3, for: 3, hp: 12, passive: "Sorte: +1 em empates." },
+    { id: "2", name: "Luigi", vel: 3, des: 4, for: 4, hp: 10, passive: "Salto: Bônus em Curvas." },
+    { id: "3", name: "Peach", vel: 3, des: 4, for: 2, hp: 10, passive: "Coração: Cura em Curvas." },
+    { id: "4", name: "Bowser", vel: 5, des: 2, for: 5, hp: 15, passive: "Casco: Defesa em Lutas." },
+    { id: "5", name: "Yoshi", vel: 2, des: 4, for: 3, hp: 10, passive: "Língua: Ignora bônus rival." },
+    { id: "6", name: "Donkey Kong", vel: 2, des: 2, for: 6, hp: 12, passive: "Bruto: Dano alto em Lutas." }
+];
+
+const itemsList = [
+    { name: "🍄 Cogumelo", effect: "Cura 4 HP", type: "heal" },
+    { name: "⭐ Estrela", effect: "+5 no dado", type: "buff" },
+    { name: "🐢 Casco", effect: "Dano -2 no rival", type: "damage" },
+    { name: "⚡ Raio", effect: "Debuff -2 no rival", type: "debuff" }
+];
+
+async function rollDiceAnimation(playerName) {
+    let result = 0;
+    for (let i = 0; i < 8; i++) {
+        result = Math.floor(Math.random() * 6) + 1;
+        process.stdout.write(`\r${c.magenta}🎲 ${playerName} girando: [ ${result} ]${c.reset}`);
+        await sleep(80);
+    }
+    console.log(` -> ${c.yellow}${c.bright}${result}${c.reset}`);
+    return result;
 }
 
-async function getRandomBlock() {
-  let random = Math.random();
-  let result;
+// 🔥 Loot por rodada + limite de inventário
+async function handleLoot(player) {
+    if (Math.random() < 0.5) {
+        const item = itemsList[Math.floor(Math.random() * itemsList.length)];
 
-  switch (true) {
-    case random < 0.33:
-      result = "RETA";
-      break;
-    case random < 0.66:
-      result = "CURVA";
-      break;
-    default:
-      result = "CONFRONTO";
-  }
+        if (player.inventory.length < 2) {
+            player.inventory.push(item);
+            console.log(`\n${c.green}🎁 ${player.name} encontrou: ${item.name}${c.reset}`);
+        } else {
+            console.log(`\n${c.yellow}⚠️ ${player.name} achou ${item.name}, mas inventário cheio!${c.reset}`);
+        }
 
-  return result;
+        await sleep(800);
+    }
 }
 
-async function logRollResult(characterName, block, diceResult, attribute) {
-  console.log(
-    `${characterName} 🎲 rolou um dado de ${block} ${diceResult} + ${attribute} = ${
-      diceResult + attribute
-    }`
-  );
+// 🎮 Menu interativo
+async function playTurn(player, opponent) {
+    console.log(`\n--- Vez de ${c.cyan}${player.name}${c.reset} ---`);
+
+    while (true) {
+        console.log(`\n${c.white}Escolha ação:${c.reset}`);
+        console.log(`1 - ⚔️ Atacar`);
+        console.log(`2 - 🎒 Usar Item`);
+        console.log(`3 - 📦 Ver Inventário`);
+
+        let action = await rl.question("> ");
+
+        if (action === "1") {
+            console.log(`${c.yellow}${player.name} decidiu atacar!${c.reset}`);
+            break;
+        }
+
+        if (action === "2") {
+            if (player.inventory.length === 0) {
+                console.log(`${c.red}❌ Sem itens!${c.reset}`);
+                continue;
+            }
+
+            console.log(`\n🎒 Inventário:`);
+            player.inventory.forEach((item, i) => {
+                console.log(`${i + 1} - ${item.name} (${item.effect})`);
+            });
+
+            let choice = await rl.question("Escolha item: ");
+            let item = player.inventory[choice - 1];
+
+            if (!item) {
+                console.log(`${c.red}❌ Escolha inválida!${c.reset}`);
+                continue;
+            }
+
+            console.log(`${c.green}✨ ${player.name} usou ${item.name}!${c.reset}`);
+
+            if (item.type === "heal") player.hp += 4;
+            if (item.type === "damage") opponent.hp -= 2;
+            if (item.type === "buff") player.nextBonus = 5;
+            if (item.type === "debuff") opponent.nextBonus = -2;
+
+            player.inventory.splice(choice - 1, 1);
+            await sleep(1000);
+            break;
+        }
+
+        if (action === "3") {
+            if (player.inventory.length === 0) {
+                console.log(`${c.yellow}📦 Inventário vazio.${c.reset}`);
+            } else {
+                console.log(`\n📦 Itens:`);
+                player.inventory.forEach(item => {
+                    console.log(`- ${item.name} (${item.effect})`);
+                });
+            }
+        }
+    }
 }
 
-async function playRaceEngine(character1, character2) {
-  for (let round = 1; round <= 5; round++) {
-    console.log(`🏁 Rodada ${round}`);
+async function runGame() {
+    console.clear();
 
-    // sortear bloco
-    let block = await getRandomBlock();
-    console.log(`Bloco: ${block}`);
+    console.log(`${c.yellow}╔══════════════════════════════════════════╗`);
+    console.log(`║                MARIO MMO                 ║`);
+    console.log(`╚══════════════════════════════════════════╝${c.reset}\n`);
 
-    // rolar os dados
-    let diceResult1 = await rollDice();
-    let diceResult2 = await rollDice();
+    characters.forEach(char =>
+        console.log(`${c.cyan}${char.id}. ${char.name.padEnd(12)}${c.reset} | HP: ${char.hp} | ${char.passive}`)
+    );
 
-    //teste de habilidade
-    let totalTestSkill1 = 0;
-    let totalTestSkill2 = 0;
+    let p1Choice = await rl.question('\nEscolha P1 (1-6): ');
+    let p2Choice = await rl.question('Escolha P2 (1-6): ');
 
-    if (block === "RETA") {
-      totalTestSkill1 = diceResult1 + character1.VELOCIDADE;
-      totalTestSkill2 = diceResult2 + character2.VELOCIDADE;
+    let p1 = { ...(characters.find(ch => ch.id === p1Choice) || characters[0]), inventory: [], nextBonus: 0 };
+    let p2 = { ...(characters.find(ch => ch.id === p2Choice) || characters[1]), inventory: [], nextBonus: 0 };
 
-      await logRollResult(
-        character1.NOME,
-        "velocidade",
-        diceResult1,
-        character1.VELOCIDADE
-      );
+    let round = 1;
 
-      await logRollResult(
-        character2.NOME,
-        "velocidade",
-        diceResult2,
-        character2.VELOCIDADE
-      );
+    while (p1.hp > 0 && p2.hp > 0) {
+        console.clear();
+
+        console.log(`${c.yellow}------------------------------------------`);
+        console.log(` ROUND ${round} | ${p1.name}: ${p1.hp} HP | ${p2.name}: ${p2.hp} HP`);
+        console.log(`------------------------------------------${c.reset}`);
+
+        await handleLoot(p1);
+        await handleLoot(p2);
+
+        const terrain = [{ n: "RETA", a: "vel" }, { n: "CURVA", a: "des" }, { n: "LUTA", a: "for" }][Math.floor(Math.random() * 3)];
+        console.log(`\n📍 Terreno: ${c.bright}${terrain.n}${c.reset}`);
+
+        await playTurn(p1, p2);
+        await playTurn(p2, p1);
+
+        console.log(`\n${c.bright}--- RESULTADO DO TURNO ---${c.reset}`);
+
+        let d1 = await rollDiceAnimation(p1.name);
+        let d2 = await rollDiceAnimation(p2.name);
+
+        let t1 = d1 + p1[terrain.a] + p1.nextBonus;
+        let t2 = d2 + p2[terrain.a] + p2.nextBonus;
+
+        if (p1.name === "Mario" && t1 === t2) t1++;
+        if (p2.name === "Mario" && t1 === t2) t2++;
+
+        console.log(`\n${p1.name} (${t1}) vs ${p2.name} (${t2})`);
+
+        if (t1 > t2) {
+            let dmg = terrain.n === "LUTA" ? 2 : 1;
+            p2.hp -= dmg;
+            console.log(`${c.red}💥 ${p1.name} venceu! (-${dmg} HP)${c.reset}`);
+        } else if (t2 > t1) {
+            let dmg = terrain.n === "LUTA" ? 2 : 1;
+            p1.hp -= dmg;
+            console.log(`${c.red}💥 ${p2.name} venceu! (-${dmg} HP)${c.reset}`);
+        } else {
+            console.log(`${c.blue}🛡️ Empate!${c.reset}`);
+        }
+
+        p1.nextBonus = 0;
+        p2.nextBonus = 0;
+
+        round++;
+        await rl.question(`\nPressione ENTER...`);
     }
 
-    if (block === "CURVA") {
-      totalTestSkill1 = diceResult1 + character1.MANOBRABILIDADE;
-      totalTestSkill2 = diceResult2 + character2.MANOBRABILIDADE;
+    console.clear();
 
-      await logRollResult(
-        character1.NOME,
-        "manobrabilidade",
-        diceResult1,
-        character1.MANOBRABILIDADE
-      );
+    console.log(`${c.yellow}╔══════════════════════════════════════════╗`);
+    console.log(`║             FIM DE JOGO                  ║`);
+    console.log(`╚══════════════════════════════════════════╝${c.reset}`);
 
-      await logRollResult(
-        character2.NOME,
-        "manobrabilidade",
-        diceResult2,
-        character2.MANOBRABILIDADE
-      );
-    }
+    console.log(`\n🏆 Vencedor: ${c.green}${p1.hp > 0 ? p1.name : p2.name}${c.reset}\n`);
 
-    if (block === "CONFRONTO") {
-      let powerResult1 = diceResult1 + character1.PODER;
-      let powerResult2 = diceResult2 + character2.PODER;
-
-      console.log(`${character1.NOME} confrontou com ${character2.NOME}! 🥊`);
-
-      await logRollResult(
-        character1.NOME,
-        "poder",
-        diceResult1,
-        character1.PODER
-      );
-
-      await logRollResult(
-        character2.NOME,
-        "poder",
-        diceResult2,
-        character2.PODER
-      );
-
-      if (powerResult1 > powerResult2 && character2.PONTOS > 0) {
-        console.log(
-          `${character1.NOME} venceu o confronto! ${character2.NOME} perdeu 1 ponto 🐢`
-        );
-        character2.PONTOS--;
-      }
-
-      if (powerResult2 > powerResult1 && character1.PONTOS > 0) {
-        console.log(
-          `${character2.NOME} venceu o confronto! ${character1.NOME} perdeu 1 ponto 🐢`
-        );
-        character1.PONTOS--;
-      }
-
-      console.log(
-        powerResult2 === powerResult1
-          ? "Confronto empatado! Nenhum ponto foi perdido"
-          : ""
-      );
-    }
-
-    // verificando o vencedor
-    if (totalTestSkill1 > totalTestSkill2) {
-      console.log(`${character1.NOME} marcou um ponto!`);
-      character1.PONTOS++;
-    } else if (totalTestSkill2 > totalTestSkill1) {
-      console.log(`${character2.NOME} marcou um ponto!`);
-      character2.PONTOS++;
-    }
-
-    console.log("-----------------------------");
-  }
+    rl.close();
 }
 
-async function declareWinner(character1, character2) {
-  console.log("Resultado final:");
-  console.log(`${character1.NOME}: ${character1.PONTOS} ponto(s)`);
-  console.log(`${character2.NOME}: ${character2.PONTOS} ponto(s)`);
-
-  if (character1.PONTOS > character2.PONTOS)
-    console.log(`\n${character1.NOME} venceu a corrida! Parabéns! 🏆`);
-  else if (character2.PONTOS > character1.PONTOS)
-    console.log(`\n${character2.NOME} venceu a corrida! Parabéns! 🏆`);
-  else console.log("A corrida terminou em empate");
-}
-
-(async function main() {
-  console.log(
-    `🏁🚨 Corrida entre ${player1.NOME} e ${player2.NOME} começando...\n`
-  );
-
-  await playRaceEngine(player1, player2);
-  await declareWinner(player1, player2);
-})();
+runGame().catch(console.error);
